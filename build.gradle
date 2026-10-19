@@ -1,0 +1,95 @@
+// TellyBridge Trainer — Minecraft 1.8.9 / Forge 11.15.1.2318
+//
+// 环境要求（ForgeGradle 2.x 的硬性限制）：
+//   * JDK 8（Temurin / Adoptium 8 均可）
+//   * Gradle 4.10.3
+// 运行方式二选一：
+//   A) gradle build                      （本机已装 Gradle 4.10.3）
+//   B) gradle wrapper --gradle-version 4.10.3 然后 ./gradlew build
+//
+// 注意：ForgeGradle 2.3+ 内部写死了 MIN 1.12，会直接拒绝 1.8.9，
+// 所以这里必须用 2.1-SNAPSHOT。
+
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { name = "forge"; url = "https://maven.minecraftforge.net/" }
+        maven { name = "sonatype"; url = "https://oss.sonatype.org/content/repositories/snapshots/" }
+    }
+    dependencies {
+        classpath "net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT"
+    }
+}
+
+apply plugin: "net.minecraftforge.gradle.forge"
+
+version = project.hasProperty("modVersion") ? project.modVersion : "0.0.0-dev"
+group = "com.tellybridge"
+archivesBaseName = "TellyBridgeTrainer-1.8.9"
+
+// 版本号单一来源是 gradle.properties 的 modVersion。
+// Java 里的 TellyBridgeTrainer.VERSION 是编译期常量（@Mod 注解要用），没法从 Gradle 注入，
+// 所以这里加一道校验：两边对不上就直接让构建失败，避免代码版本与发布信息不一致。
+// 提示信息用英文，避免控制台编码不同导致乱码看不懂。
+task verifyVersion {
+    def srcFile = file("src/main/java/com/tellybridge/trainer/TellyBridgeTrainer.java")
+    inputs.file srcFile
+    inputs.property "version", project.version.toString()
+    doLast {
+        def matcher = (srcFile.text =~ /String\s+VERSION\s*=\s*"([^"]+)"/)
+        if (!matcher.find()) {
+            throw new GradleException("Cannot find the VERSION constant in TellyBridgeTrainer.java")
+        }
+        def actual = matcher.group(1)
+        if (actual != project.version.toString()) {
+            throw new GradleException(
+                "Version mismatch: gradle.properties modVersion=" + project.version +
+                " but Java VERSION=" + actual + ". Unify them before building (see README).")
+        }
+        println "version check passed: " + actual
+    }
+}
+
+check.dependsOn verifyVersion
+
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
+
+minecraft {
+    version = "1.8.9-11.15.1.2318-1.8.9"
+    runDir = "run"
+    // 1.8.9 可用的 MCP 稳定映射：stable_20 / stable_22
+    mappings = "stable_22"
+    makeObfSourceJar = false
+}
+
+compileJava {
+    options.encoding = "UTF-8"
+    sourceCompatibility = "1.8"
+    targetCompatibility = "1.8"
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "mcversion", project.minecraft.version
+
+    from(sourceSets.main.resources.srcDirs) {
+        include "mcmod.info"
+        expand "version": project.version, "mcversion": project.minecraft.version
+    }
+    from(sourceSets.main.resources.srcDirs) {
+        exclude "mcmod.info"
+    }
+}
+
+// 一条命令出可分发产物，顺序保证是对的：reobfJar 之后才拷。
+// 直接拷 build/libs 有坑——runClient 会把它覆盖回未重混淆的 dev jar（成员名是 MCP 名），
+// 那个 jar 进正式客户端会崩。
+task release(type: Copy, dependsOn: ["reobfJar", "verifyVersion"]) {
+    from "${buildDir}/libs"
+    into "${projectDir}/dist"
+    include "*.jar"
+    doLast {
+        println "dist/ 已更新（reobf 后的 jar）"
+    }
+}

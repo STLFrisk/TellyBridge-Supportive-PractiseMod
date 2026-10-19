@@ -1,0 +1,17 @@
+[
+  {
+    "modid": "tellybridge",
+    "name": "TellyBridge Trainer",
+    "description": "Client-side telly bridge practice HUD: placement cadence, jump-to-place latency, blocks per jump, pitch band, ghost replay of your best run.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "authorList": ["TellyBridge Trainer"],
+    "credits": "Client-side only. No auto-place, no aim assist, no reach changes.",
+    "logoFile": "",
+    "url": "",
+    "updateUrl": "",
+    "parent": "",
+    "screenshots": [],
+    "dependencies": []
+  }
+]
